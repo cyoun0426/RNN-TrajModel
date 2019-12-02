@@ -1,3 +1,9 @@
+using namespace std
+#include <list>
+
+#include "GeoPoint.h"
+#include "RoadNet.h"
+
 double MapMatcher::cal_logEmiProb(GeoPoint* p, int s)
 {
 	//////////////////////////////////////////////////////////////////////////
