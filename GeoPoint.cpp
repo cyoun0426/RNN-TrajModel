@@ -20,4 +20,6 @@ int GeoPoint::getMmRoadId() { return mmRoadId; }
 
 void GeoPoint::setLat(double lat) { this->lat = lat; }
 void GeoPoint::setLon(double lon) { this->lon = lon; }
-void GeoPoint::setMmRoadId(double mmRoadId) { this->mmRoadId = mmRoadId; }
+void GeoPoint::setMmRoadId(int mmRoadId) { this->mmRoadId = mmRoadId; }
+
+double GeoPoint::distM(GeoPoint *p_pre, GeoPoint *p) return 0;

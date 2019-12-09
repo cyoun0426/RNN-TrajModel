@@ -1,3 +1,6 @@
+#ifndef GEOPOINT_H
+#define GEOPOINT_H
+
 class GeoPoint {
     public:
         /* Class members */
@@ -17,4 +20,8 @@ class GeoPoint {
         void setLat(double);
         void setLon(double);
         void setMmRoadId(int);        
+
+        double distM(GeoPoint *, GeoPoint *);
 };
+
+#endif

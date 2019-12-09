@@ -1,10 +1,8 @@
 GCC=g++
-GCCFLAGS=-Iinclude -std=c++11
-TARGET=HMM_mapmatching
+GCCFLAGS=-Wall -std=c++11
+TARGET=map
 
-all: match
-
-match: $(TARGET)
+all: $(TARGET)
 
 $(TARGET): $(TARGET).cpp $(wildcard *.cpp)
 	$(GCC) $(GCCFLAGS) -o $@ $^

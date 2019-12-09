@@ -1,17 +1,23 @@
-using namespace std
-#include <list>
+#include <iostream>
+#include <stdio.h>
+#include <math.h>
+using namespace std;
 
-#include "GeoPoint.h"
-#include "RoadNet.h"
+#include "HMM_mapmatching.h"
+
+#define SIGMA 4.07      // value from GIS'09 paper
+#define MU 0            // value from GIS'09 paper
 
 /* 
  * Compute the emission probability like the GIS'09 paper
  * p: a observation
  * s: a candidate state, i.e., a road id
  */
-double MapMatcher::cal_logEmiProb(GeoPoint* p, int s, double mu, double sigma) {
-	double dist = roadNet->dist(p->lat, p->lon, roadNet->edges[s]);     //compute the vertical distance from a point to an edge (in meters)
-	return -0.5 * ((dist - mu) / sigma) * ((dist - mu) / sigma);
+double MapMatcher::cal_logEmiProb(GeoPoint* p, int s) {
+    // Compute the vertical distance from a point to an edge (in meters)
+    // FIXME: where is roadNet coming from
+	double dist = roadNet->dist(p->lat, p->lon, roadNet->edges[s]);
+	return -0.5 * ((dist - MU) / SIGMA) * ((dist - MU) / SIGMA);
 }
 
 
@@ -23,7 +29,9 @@ double MapMatcher::cal_logEmiProb(GeoPoint* p, int s, double mu, double sigma) {
  * s2: the candidate state of p, a road id
  */
 double MapMatcher::cal_logTransProb(GeoPoint* p_pre, GeoPoint* p, int s1, int s2) {
-	Edge* e1 = roadNet->edges[s1], *e2 = roadNet->edges[s2];
+    // FIXME: where is roadNet coming from
+	Edge *e1 = roadNet->edges[s1];
+    Edge *e2 = roadNet->edges[s2];
     
     if (e1 == NULL || e2 == NULL) {
 		cout << "Error@MapMatcher::cal_logTransProb: edge is NULL" << endl;
@@ -33,12 +41,15 @@ double MapMatcher::cal_logTransProb(GeoPoint* p_pre, GeoPoint* p, int s1, int s2
 
     double dist_G = 0.0;
 	if (s1 == s2) {
-		double start2p1, start2p2; // the road network distance from the start node of e1/e2 to the projection of p1/p2 on e1/e2
-		start2p1 = roadNet->start2projection(p_pre->lat, p_pre->lon, e1); //compute the road network distance from the start node of an edge to the projection of a given point onto a given edge
+        // the road network distance from the start node of e1/e2 to the objection of p1/p2 on e1/e2
+		double start2p1, start2p2;
+
+        // compute the road network distance from the start node of an edge to the projection of a given point onto a given edge
+		start2p1 = roadNet->start2projection(p_pre->lat, p_pre->lon, e1);
 		start2p2 = roadNet->start2projection(p->lat, p->lon, e1);
 
-        if (start2p2 >= start2p1) dist_G += (start2p2 - start2p1); //p1->p2 is along direction of the road
-		else dist_G += (start2p1 - start2p2); //p2->p1 is along direction of the road
+        if (start2p2 >= start2p1) dist_G += (start2p2 - start2p1); // case 1: p1->p2 is along direction of the road
+		else dist_G += (start2p1 - start2p2); // case 2: p2->p1 is along direction of the road
 	}
 	else {
 		double e1start2p1, e2start2p2; // the road network distance from the start node of e1/e2 to the projection of p1/p2 on e1/e2
@@ -50,8 +61,10 @@ double MapMatcher::cal_logTransProb(GeoPoint* p_pre, GeoPoint* p, int s1, int s2
 			dist_G += roadNet->cal_SP(e1->endNodeId, e2->startNodeId); // compute the shortest path given two nodes in the road network, should be implemented by yourself
 		}		
 	}
-
+    
+    // FIXME: what should distM do & how is it called without a GeoPoint object
 	double dist = GeoPoint::distM(p_pre, p);
+    // FIXME: value of beta not found in GIS'09 paper
 	return -fabs(dist - dist_G) / beta;
 }
 
@@ -73,12 +86,14 @@ double MapMatcher::cal_logTransProb(GeoPoint* p_pre, GeoPoint* p, int s1, int s2
  * If you want to get the legal route (i.e., a edge sequence with each edge being adjacent), just insert the shortest path into the edges which are not adjacent, to form a continuous route
  */
 bool MapMatcher::MapMatching_kernel(list<GeoPoint*>& traj, double candidateRangeM) {
+    // FIXME: where is roadNet coming from
 	int maxEdgeNum = roadNet->edges.size(); // #edges in a road network
 	int seqLen = traj.size(); // #points in a given trajectory
 	vector<pair<int, double> > logProbPrev; //records in the previous time step, if the state is `logProbPrev[i].first`, its corresponding log probability is `logProbPrev[t].second`
 	vector<vector<pair<int, int> > > pathMat; //records in time step t, if the state is `pathMat[t][i].first`, its corresponding best state in t-1 is `pathMat[t-1][pathMat[t][i].second].first`
 	list<GeoPoint*>::iterator ptIter = traj.begin();
 	list<GeoPoint*>::iterator pre_ptIter = traj.begin();
+    // FIXME: what is candidates_traj
 	list<vector<Edge*>>::iterator candidates_traj_iter = candidates_traj.begin();
 	bool firstFlag = true;
 	int t = 0; //record for time step
@@ -96,8 +111,9 @@ bool MapMatcher::MapMatching_kernel(list<GeoPoint*>& traj, double candidateRange
 
 		vector<pair<int, double> > logProbCurrent;
 		vector<pair<int, int> > currentStates_for_pathMat;
-		for each (Edge* edge in candidates) {
-			int s = edge->id;
+		//for each (Edge* edge in candidates) {         
+        for (auto edge = candidates.begin(); edge < candidates.end; edge++) {
+			int s = (*edge)->id;
 			double logEmiProb = cal_logEmiProb(pt, s); //compute the log emission probability, should be implemented by yourself
 			currentStates_for_pathMat.push_back(make_pair(s, -1));
 
@@ -105,11 +121,11 @@ bool MapMatcher::MapMatching_kernel(list<GeoPoint*>& traj, double candidateRange
 				//initialize logProbCurrent[i].second = P(s|p_0)， logProbCurrent[i].first = s
 				logProbCurrent.push_back(make_pair(s, logEmiProb));						
 			}
-			else {				
+			else {
 				//M[i, s] = max{M[i-1, s'] + P(s|s') + P(o|s)} where M[i-1, s'] > -INF
 				double maxProb = -INF;
 
-				for (int i = 0; i < logProbPrev.size(); i++) {
+				for (int i = 0; i < (int)logProbPrev.size(); i++) {
 					int s_prev = logProbPrev[i].first;
 					if (roadNet->edges[s_prev] == NULL) {
 						cout << "error: edge is null" << endl;
@@ -145,8 +161,8 @@ bool MapMatcher::MapMatching_kernel(list<GeoPoint*>& traj, double candidateRange
         t++;
 	}
 	
-	//retrieve the path
-	//find the state of the last time step having the highest log prob
+	// retrieve the path
+	// find the state of the last time step having the highest log prob
 	double maxProb = -INF;
 	int last_state = -1;
     int last_idx = -1;
@@ -158,14 +174,14 @@ bool MapMatcher::MapMatching_kernel(list<GeoPoint*>& traj, double candidateRange
 		}
 	}
 
-	//then go back till the head
+	// then go back till the head
 	vector<int> rev_path;
-	int succ_state = last_state; //record the best state of time step t+1
-	int succ_idx = last_idx; //record the position of `succ_state` in pathMat[t+1]
+	int succ_state = last_state;    // record the best state of time step t+1
+	int succ_idx = last_idx;        // record the position of `succ_state` in pathMat[t+1]
 	ptIter = traj.end(); ptIter--;
 	for (t = traj.size()-1; t >=0; ptIter--, t--) {
 
-        if (t == traj.size() - 1) {
+        if (t == (int)traj.size() - 1) {
 			(*ptIter)->mmRoadId = last_state; //`mmRoadId` now records the matched road segment, just implement your GeoPoint class by your own.
 		}
 		else {
